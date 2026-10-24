@@ -581,21 +581,37 @@ function formatTime(seconds: number): string {
   return `${minutes}:${String(remain).padStart(2, "0")}`;
 }
 
-const RED_STANZAS = new Set([3, 8, 12, 17, 22]);
+const RED_WORDS = ["የመንፈስ ቅዱስን", "የመንፈስ ቅዱስ", "ፊልጶስ ሆይ", "ጳውሎስን", "ክርስቶስ", "ፊልጶስ", "የአብ"];
 
-function PrayerStanza({ text, accent }: { text: string; accent: boolean }): ReactNode {
+function highlightPrayer(line: string): ReactNode[] {
+  const pattern = new RegExp(RED_WORDS.join("|"), "g");
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  for (const match of line.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > last) nodes.push(line.slice(last, index));
+    nodes.push(
+      <span className="is-close" key={index}>
+        {match[0]}
+      </span>,
+    );
+    last = index + match[0].length;
+  }
+  if (last < line.length) nodes.push(line.slice(last));
+  if (nodes.length === 0) nodes.push(line);
+  return nodes;
+}
+
+function PrayerStanza({ text }: { text: string }): ReactNode {
   const lines = text.split("\n");
   return (
     <p className="prayer-stanza">
-      {lines.map((line, index) => {
-        const marked = accent && index === lines.length - 1;
-        return (
-          <Fragment key={index}>
-            {index > 0 ? <br /> : null}
-            {marked ? <span className="is-close">{line}</span> : line}
-          </Fragment>
-        );
-      })}
+      {lines.map((line, index) => (
+        <Fragment key={index}>
+          {index > 0 ? <br /> : null}
+          {highlightPrayer(line)}
+        </Fragment>
+      ))}
     </p>
   );
 }
@@ -736,7 +752,7 @@ function PrayerPanel(): ReactNode {
           <h3 className="prayer-title">
             {prayerTitle.map((line) => (
               <span key={line}>
-                {line}
+                {highlightPrayer(line)}
                 <br />
               </span>
             ))}
@@ -752,10 +768,7 @@ function PrayerPanel(): ReactNode {
                     </p>
                   );
                 }
-                const stanzaIndex = prayerBlocks
-                  .slice(0, index)
-                  .filter((item) => item.kind === "stanza").length;
-                return <PrayerStanza key={index} text={block.text} accent={RED_STANZAS.has(stanzaIndex)} />;
+                return <PrayerStanza key={index} text={block.text} />;
               })}
             </div>
             <div
