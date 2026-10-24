@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# full-size film frames kept locally; the site serves public/frame-medium
+/frame-webp-full
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

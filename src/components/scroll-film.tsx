@@ -14,7 +14,7 @@ const primedFrames = new Map<number, ImageBitmap>();
 let primeTask: Promise<void> | null = null;
 
 function frameSrc(index: number): string {
-  return `/frame-webp/frame_${String(index + 1).padStart(3, "0")}.webp`;
+  return `/frame-medium/frame_${String(index + 1).padStart(3, "0")}.webp`;
 }
 
 async function runPool(tasks: Array<() => Promise<void>>, limit: number): Promise<void> {
@@ -397,7 +397,7 @@ export function ScrollFilm(): ReactNode {
           <img src="/design/hero/seal-ring.svg" width={51} height={51} alt="" />
           <img className="hero-seal-mark" src="/design/hero/mark.png" width={35} height={35} alt="" />
         </a>
-        <span>ቅዱስ ፊልጶስ</span>
+        <span>ጃን ፊልጶስ</span>
         <span>ኢትዮጲያዊው ጃንደረባ ትውልድ</span>
       </header>
 

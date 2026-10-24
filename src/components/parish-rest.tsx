@@ -177,7 +177,7 @@ export function ParishRest(): ReactNode {
         <div className="seal">
           <img src="/design/footer-mark.png" width={52} height={52} alt="" />
         </div>
-        <p>© 2026 የቅዱስ ፊልጶስ ዋና ገጽ</p>
+        <p>© 2026 ኢትዮጵያዊው ጃንደረባ ትውልድ</p>
       </footer>
     </>
   );
