@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ParishRest } from "@/components/parish-rest";
 
 const FRAME_COUNT = 80;
-const FRAME_READY = Math.ceil(FRAME_COUNT * 0.75);
+const FRAME_READY = Math.ceil(FRAME_COUNT * 0.9);
 const FRAME_BEHIND = 2;
 const FRAME_AHEAD = 10;
 const PRAYER_AUDIO = "/melke-filipos.mp3";
