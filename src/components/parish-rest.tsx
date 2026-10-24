@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   historyParagraphs,
   historySubtitle,
   historyTitle,
-  prayerLines,
+  prayerBlocks,
   prayerTitle,
 } from "@/content/parish-copy";
 
@@ -581,6 +581,25 @@ function formatTime(seconds: number): string {
   return `${minutes}:${String(remain).padStart(2, "0")}`;
 }
 
+const RED_STANZAS = new Set([3, 8, 12, 17, 22]);
+
+function PrayerStanza({ text, accent }: { text: string; accent: boolean }): ReactNode {
+  const lines = text.split("\n");
+  return (
+    <p className="prayer-stanza">
+      {lines.map((line, index) => {
+        const marked = accent && index === lines.length - 1;
+        return (
+          <Fragment key={index}>
+            {index > 0 ? <br /> : null}
+            {marked ? <span className="is-close">{line}</span> : line}
+          </Fragment>
+        );
+      })}
+    </p>
+  );
+}
+
 function PrayerPanel(): ReactNode {
   const railRef = useRef<HTMLDivElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
@@ -725,18 +744,19 @@ function PrayerPanel(): ReactNode {
           <hr className="prayer-rule" />
           <div className="prayer-scroll">
             <div className="prayer-copy" ref={copyRef}>
-              {prayerLines.map((line) => (
-                <p
-                  key={line}
-                  className={
-                    line.startsWith("እንዳስተማርኸው") || line.startsWith("አስተምረን")
-                      ? "is-accent"
-                      : undefined
-                  }
-                >
-                  {line}
-                </p>
-              ))}
+              {prayerBlocks.map((block, index) => {
+                if (block.kind === "note") {
+                  return (
+                    <p className="prayer-note" key={index}>
+                      {block.text}
+                    </p>
+                  );
+                }
+                const stanzaIndex = prayerBlocks
+                  .slice(0, index)
+                  .filter((item) => item.kind === "stanza").length;
+                return <PrayerStanza key={index} text={block.text} accent={RED_STANZAS.has(stanzaIndex)} />;
+              })}
             </div>
             <div
               className="prayer-bar"

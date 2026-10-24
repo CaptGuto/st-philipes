@@ -1,14 +1,162 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ParishRest } from "@/components/parish-rest";
 
 const FRAME_COUNT = 80;
+const FRAME_READY = Math.ceil(FRAME_COUNT * 0.75);
 const FRAME_BEHIND = 2;
 const FRAME_AHEAD = 10;
+const PRAYER_AUDIO = "/melke-filipos.mp3";
+
+const frameBlobs = new Map<number, Blob>();
+const primedFrames = new Map<number, ImageBitmap>();
+let primeTask: Promise<void> | null = null;
 
 function frameSrc(index: number): string {
   return `/frame-webp/frame_${String(index + 1).padStart(3, "0")}.webp`;
+}
+
+async function runPool(tasks: Array<() => Promise<void>>, limit: number): Promise<void> {
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < tasks.length) {
+      const current = cursor;
+      cursor += 1;
+      await tasks[current]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+}
+
+async function loadFrameBlob(index: number, signal: AbortSignal): Promise<void> {
+  if (frameBlobs.has(index)) return;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    try {
+      const response = await fetch(frameSrc(index), { signal });
+      if (!response.ok) throw new Error(`Frame ${index + 1} failed`);
+      frameBlobs.set(index, await response.blob());
+      return;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function loadImage(src: string): Promise<void> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = src;
+  });
+}
+
+function loadAudio(src: string, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    const finish = () => {
+      audio.removeEventListener("canplaythrough", finish);
+      audio.removeEventListener("error", finish);
+      resolve();
+    };
+    signal.addEventListener("abort", finish, { once: true });
+    audio.preload = "auto";
+    audio.addEventListener("canplaythrough", finish, { once: true });
+    audio.addEventListener("error", finish, { once: true });
+    audio.src = src;
+    audio.load();
+  });
+}
+
+function primeFirstFrame(): Promise<void> {
+  if (primeTask) return primeTask;
+  const blob = frameBlobs.get(0);
+  if (!blob) return Promise.resolve();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const targetWidth = Math.max(1, Math.round(window.innerWidth * dpr));
+  primeTask = createImageBitmap(blob, { resizeWidth: targetWidth, resizeQuality: "high" })
+    .then((bitmap) => {
+      primedFrames.set(0, bitmap);
+    })
+    .catch(() => {
+      primeTask = null;
+    });
+  return primeTask;
+}
+
+async function preloadSite(onProgress: (ratio: number) => void, signal: AbortSignal): Promise<void> {
+  const mobile = window.matchMedia("(max-width: 800px)").matches;
+  const frameTarget = mobile ? 0 : FRAME_READY;
+  const images = mobile
+    ? [
+        "/design/hero/background.png",
+        "/design/hero/mark.png",
+        "/design/hero/seal-ring.svg",
+        "/design/hero/badge.svg",
+        "/design/hero/title-plate.svg",
+        "/design/hero/header.svg",
+      ]
+    : ["/design/hero/mark.png", "/design/hero/seal-ring.svg"];
+  const total = frameTarget + images.length + 1;
+  let done = 0;
+  const tick = () => onProgress(total === 0 ? 1 : done / total);
+  const tasks: Array<() => Promise<void>> = [];
+
+  for (let index = 0; index < frameTarget; index += 1) {
+    tasks.push(async () => {
+      try {
+        await loadFrameBlob(index, signal);
+      } catch (error) {
+        if (signal.aborted) throw error;
+      } finally {
+        if (!signal.aborted) {
+          done += 1;
+          tick();
+        }
+      }
+    });
+  }
+
+  for (const src of images) {
+    tasks.push(async () => {
+      await loadImage(src);
+      if (signal.aborted) return;
+      done += 1;
+      tick();
+    });
+  }
+
+  tasks.push(async () => {
+    await loadAudio(PRAYER_AUDIO, signal);
+    if (signal.aborted) return;
+    done += 1;
+    tick();
+  });
+
+  await runPool(tasks, 6);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  if (!mobile) await primeFirstFrame();
+  onProgress(1);
+}
+
+function BootScreen({ progress }: { progress: number }): ReactNode {
+  const percent = Math.round(progress * 100);
+  return (
+    <div className="boot" role="status" aria-live="polite" aria-label="በመጫን ላይ">
+      <div className="boot-seal" aria-hidden="true">
+        <img src="/design/hero/seal-ring.svg" width={128} height={128} alt="" />
+        <img className="boot-mark" src="/design/hero/mark.png" width={88} height={88} alt="" />
+      </div>
+      <div className="boot-track" aria-hidden="true">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
 }
 
 function drawCover(
@@ -99,17 +247,27 @@ function bindFilmToScroll(
 
   const load = (index: number) => {
     if (frames[index] || inflight.has(index)) return;
+    const primed = primedFrames.get(index);
+    if (primed) {
+      primedFrames.delete(index);
+      frames[index] = primed;
+      if (index === wanted || shown < 0) paint(nearestReady(wanted));
+      return;
+    }
     const controller = new AbortController();
     inflight.set(index, controller);
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const targetWidth = Math.max(1, Math.round(window.innerWidth * dpr));
+    const cached = frameBlobs.get(index);
+    const blobTask = cached
+      ? Promise.resolve(cached)
+      : fetch(frameSrc(index), { signal: controller.signal }).then((response) => {
+          if (!response.ok) throw new Error(`Frame ${index + 1} failed`);
+          return response.blob();
+        });
 
-    fetch(frameSrc(index), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Frame ${index + 1} failed`);
-        return response.blob();
-      })
+    blobTask
       .then((blob) =>
         createImageBitmap(blob, {
           resizeWidth: targetWidth,
@@ -185,7 +343,31 @@ export function ScrollFilm(): ReactNode {
   const stageRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const topbarRef = useRef<HTMLElement>(null);
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    document.documentElement.classList.add("is-booting");
+    preloadSite((ratio) => {
+      if (active) setProgress(ratio);
+    }, controller.signal)
+      .catch(() => undefined)
+      .then(() => {
+        if (!active || controller.signal.aborted) return;
+        document.documentElement.classList.remove("is-booting");
+        setReady(true);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+      document.documentElement.classList.remove("is-booting");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
     const query = window.matchMedia("(max-width: 800px)");
     let stop = () => {};
     const sync = () => {
@@ -204,7 +386,9 @@ export function ScrollFilm(): ReactNode {
       query.removeEventListener("change", sync);
       stop();
     };
-  }, []);
+  }, [ready]);
+
+  if (!ready) return <BootScreen progress={progress} />;
 
   return (
     <>
@@ -233,6 +417,7 @@ export function ScrollFilm(): ReactNode {
               የወንጌላዊው ቅዱስ ፊልጶስ ዝክር
             </h1>
           </div>
+          <img className="film-logo" src="/logo.png" width={176} height={232} alt="ጃን ፊልጶስ" />
         </div>
       </section>
 
@@ -260,12 +445,12 @@ export function ScrollFilm(): ReactNode {
             ቅዱስ <span>ፊልጶስ</span> ወንጌላዊ
           </h1>
           <p>
-            የቀዳሚው እርቅ ዲያቆን፣ የኢትዮጵያ ጃንደረባ መምህር፣
+            ቅዱስ ፊልጶስ ኢትዮጲያዊውን ባኮስ አጥምቆ ክርስትናን ወደ ኢትዮጵያ እንዲገባ አደረገ
             <br />
             በኢትዮጵያ ወንጌልን በመጀመሪያ የተከለ።
           </p>
           <a className="figma-cta figma-cta-main" href="#prayer">
-            መልካ ቅዱስ ፊልጶስ
+            መልክዐ ቅዱስ ፊልጶስ
           </a>
         </div>
       </section>

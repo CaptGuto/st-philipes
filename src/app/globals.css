@@ -42,6 +42,58 @@ html {
   scroll-behavior: auto;
 }
 
+html.is-booting,
+html.is-booting body {
+  overflow: hidden;
+}
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: #620114;
+}
+
+.boot-seal {
+  position: relative;
+  display: grid;
+  width: 128px;
+  height: 128px;
+  place-items: center;
+}
+
+.boot-seal img:first-child {
+  width: 128px;
+  height: 128px;
+}
+
+.boot-mark {
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  border-radius: 100px;
+  object-fit: cover;
+}
+
+.boot-track {
+  width: min(180px, 46vw);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(243, 194, 32, 0.28);
+}
+
+.boot-track span {
+  display: block;
+  height: 100%;
+  background: #f3c220;
+}
+
 body {
   min-height: 100%;
   color: var(--ink);
@@ -74,6 +126,16 @@ body {
   filter: blur(var(--film-blur)) brightness(var(--film-dim));
   transform: scale(var(--film-scale));
   transform-origin: center center;
+}
+
+.film-logo {
+  position: absolute;
+  z-index: 2;
+  right: 22px;
+  bottom: 22px;
+  width: clamp(120px, 11vw, 176px);
+  height: auto;
+  pointer-events: none;
 }
 
 .hero-seal {
@@ -656,8 +718,20 @@ body {
   margin: 0;
 }
 
-.prayer-copy .is-accent {
-  color: #630014;
+.prayer-stanza {
+  margin: 0 0 16px;
+}
+
+.prayer-stanza:last-child {
+  margin-bottom: 0;
+}
+
+.prayer-note {
+  margin: 4px 0 16px;
+}
+
+.prayer-copy .is-close {
+  color: #620114;
 }
 
 .transport {
