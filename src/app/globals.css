@@ -586,6 +586,7 @@ body {
 
 .spread-chip:focus-visible,
 .book-step:focus-visible,
+.prayer-lang button:focus-visible,
 .transport-buttons button:focus-visible,
 .rail:focus-visible {
   outline: 2px solid #630014;
@@ -621,6 +622,33 @@ body {
   font-size: 40px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.prayer-lang {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.prayer-lang button {
+  min-width: 112px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid #f5f1e8;
+  border-radius: 999px;
+  background: transparent;
+  color: #f5f1e8;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.prayer-lang button[aria-pressed="true"] {
+  border-color: #620114;
+  background: #620114;
+  color: #f5f1e8;
 }
 
 .prayer-card {

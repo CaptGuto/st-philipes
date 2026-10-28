@@ -5,8 +5,8 @@ import {
   historyParagraphs,
   historySubtitle,
   historyTitle,
-  prayerBlocks,
-  prayerTitle,
+  prayerCopy,
+  type PrayerScript,
 } from "@/content/parish-copy";
 
 const ONES = ["", "፩", "፪", "፫", "፬", "፭", "፮", "፯", "፰", "፱"];
@@ -581,10 +581,19 @@ function formatTime(seconds: number): string {
   return `${minutes}:${String(remain).padStart(2, "0")}`;
 }
 
-const RED_WORDS = ["የመንፈስ ቅዱስን", "የመንፈስ ቅዱስ", "ፊልጶስ ሆይ", "ጳውሎስን", "ክርስቶስ", "ፊልጶስ", "የአብ"];
+const RED_WORDS: Record<PrayerScript, string[]> = {
+  am: ["የመንፈስ ቅዱስን", "የመንፈስ ቅዱስ", "ፊልጶስ ሆይ", "ጳውሎስን", "ክርስቶስ", "ፊልጶስ", "የአብ"],
+  gez: ["መንፈስ ቅዱስ", "ጳውሎስ", "ክርስቶስ", "ፊልጶስ", "አብ"],
+};
 
-function highlightPrayer(line: string): ReactNode[] {
-  const pattern = new RegExp(RED_WORDS.join("|"), "g");
+function highlightPrayer(line: string, script: PrayerScript): ReactNode[] {
+  const parts = RED_WORDS[script].map((word) => {
+    if (script === "gez" && word === "አብ") {
+      return "(?<![\\u1200-\\u137F])(?:[ለበከወ])?አብ(?![\\u1200-\\u137F])";
+    }
+    return word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  });
+  const pattern = new RegExp(parts.join("|"), "g");
   const nodes: ReactNode[] = [];
   let last = 0;
   for (const match of line.matchAll(pattern)) {
@@ -602,14 +611,14 @@ function highlightPrayer(line: string): ReactNode[] {
   return nodes;
 }
 
-function PrayerStanza({ text }: { text: string }): ReactNode {
+function PrayerStanza({ text, script }: { text: string; script: PrayerScript }): ReactNode {
   const lines = text.split("\n");
   return (
     <p className="prayer-stanza">
       {lines.map((line, index) => (
         <Fragment key={index}>
           {index > 0 ? <br /> : null}
-          {highlightPrayer(line)}
+          {highlightPrayer(line, script)}
         </Fragment>
       ))}
     </p>
@@ -625,6 +634,7 @@ function PrayerPanel(): ReactNode {
   const [duration, setDuration] = useState(DURATION);
   const [playing, setPlaying] = useState(false);
   const [thumb, setThumb] = useState(0);
+  const [script, setScript] = useState<PrayerScript>("am");
   const dragging = useRef(false);
   const barDrag = useRef(false);
 
@@ -659,6 +669,7 @@ function PrayerPanel(): ReactNode {
       const range = node.scrollHeight - node.clientHeight;
       setThumb(range <= 1 ? 0 : node.scrollTop / range);
     };
+    node.scrollTop = 0;
     sync();
     node.addEventListener("scroll", sync, { passive: true });
     const observer = new ResizeObserver(sync);
@@ -667,7 +678,7 @@ function PrayerPanel(): ReactNode {
       node.removeEventListener("scroll", sync);
       observer.disconnect();
     };
-  }, []);
+  }, [script]);
 
   const ratio = duration > 0 ? Math.min(1, Math.max(0, time / duration)) : 0;
 
@@ -743,16 +754,26 @@ function PrayerPanel(): ReactNode {
   };
 
   return (
-    <section className="prayer" id="prayer" lang="am" aria-label="ፀሎት">
+    <section className="prayer" id="prayer" lang={script === "gez" ? "gez" : "am"} aria-label="ፀሎት">
       <audio ref={audioRef} src={PRAYER_AUDIO} preload="metadata" />
       <img className="prayer-ground" src="/design/prayer-ground.svg" width={1460} height={1154} alt="" />
       <div className="prayer-inner">
-        <h2 className="prayer-kicker">የቅዱስ ፊልጶስ መልክ</h2>
+        <h2 className="prayer-kicker">
+          {script === "gez" ? "መልክዐ ቅዱስ ፊልጶስ" : "የቅዱስ ፊልጶስ መልክ"}
+        </h2>
+        <div className="prayer-lang" role="group" aria-label="የመልክ ቋንቋ">
+          <button type="button" aria-pressed={script === "am"} onClick={() => setScript("am")}>
+            አማርኛ
+          </button>
+          <button type="button" aria-pressed={script === "gez"} onClick={() => setScript("gez")}>
+            ግዕዝ
+          </button>
+        </div>
         <div className="prayer-card">
           <h3 className="prayer-title">
-            {prayerTitle.map((line) => (
+            {prayerCopy[script].title.map((line) => (
               <span key={line}>
-                {highlightPrayer(line)}
+                {highlightPrayer(line, script)}
                 <br />
               </span>
             ))}
@@ -760,7 +781,7 @@ function PrayerPanel(): ReactNode {
           <hr className="prayer-rule" />
           <div className="prayer-scroll">
             <div className="prayer-copy" ref={copyRef}>
-              {prayerBlocks.map((block, index) => {
+              {prayerCopy[script].blocks.map((block, index) => {
                 if (block.kind === "note") {
                   return (
                     <p className="prayer-note" key={index}>
@@ -768,7 +789,7 @@ function PrayerPanel(): ReactNode {
                     </p>
                   );
                 }
-                return <PrayerStanza key={index} text={block.text} />;
+                return <PrayerStanza key={index} text={block.text} script={script} />;
               })}
             </div>
             <div
